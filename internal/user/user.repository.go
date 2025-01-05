@@ -2,117 +2,170 @@ package user
 
 import (
 	"context"
-	"errors"
+	"database/sql"
+	"fmt"
+	"log"
+	"strings"
+
+	"github.com/PontnauGonzalo/go-rest-api/internal/domain"
 )
+
+type DB struct {
+	Users     []domain.User
+	MaxUserID uint64
+}
 
 type (
-	UserController func(ctx context.Context, data interface{}) (interface{}, error)
-	Endpoints      struct {
-		Create  UserController
-		GetAll  UserController
-		GetById UserController
-		Update  UserController
-		Delete  UserController
+	UserRepository interface {
+		Create(ctx context.Context, user *domain.User) error
+		Update(ctx context.Context, id uint64, firstName, lastName, email string) error
+		GetAll(ctx context.Context) ([]domain.User, error)
+		GetById(ctx context.Context, id uint64) (*domain.User, error)
+		Delete(ctx context.Context, id uint64) error
 	}
 
-	GetReq struct {
-		UserID uint64
-	}
-	CreateRequest struct {
-		FirstName string `json:"first_name"`
-		LastName  string `json:"last_name"`
-		Email     string `json:"email"`
-	}
-	UpdateRequest struct {
-		UserID    uint64
-		FirstName string `json:"first_name"`
-		LastName  string `json:"last_name"`
-		Email     string `json:"email"`
-	}
-	DeleteReq struct {
-		UserID uint64
+	userRepository struct {
+		db  *sql.DB
+		log *log.Logger
 	}
 )
 
-func MakeEndpoints(ctx context.Context, service UserService) Endpoints {
-	return Endpoints{
-		Create:  makeCreateEndpoint(service),
-		GetAll:  makeGetAllEndpoint(service),
-		GetById: makeGetByIdEndpoint(service),
-		Update:  makeUpdateEndpoint(service),
-		Delete:  makeDeleteEndpoint(service),
+func NewRepository(db *sql.DB, logger *log.Logger) UserRepository {
+	return &userRepository{
+		db:  db,
+		log: logger,
 	}
 }
 
-func makeGetAllEndpoint(service UserService) UserController {
-	return func(ctx context.Context, data interface{}) (interface{}, error) {
-		users, err := service.GetAll(ctx)
-		if err != nil {
-			return nil, response.InternalServerError(err.Error())
-		}
-		return response.OK("success", users), nil
-	}
-}
-func makeGetByIdEndpoint(service UserService) UserController {
-	return func(ctx context.Context, data interface{}) (interface{}, error) {
-		result := data.(GetReq)
-		user, err := service.GetById(ctx, result.UserID)
-		if err != nil {
-			if errors.As(err, &ErrNotFound{}) {
-				return nil, response.NotFound(err.Error())
-			}
+func (r *userRepository) Create(ctx context.Context, user *domain.User) error {
+	sqlQuery := "INSERT INTO users(first_name, last_name, email) VALUES(?, ?, ?)"
 
-			return nil, response.InternalServerError(err.Error())
-		}
-		return response.OK("success", user), nil
+	res, err := r.db.Exec(sqlQuery, user.FirstName, user.LastName, user.Email)
+	if err != nil {
+		r.log.Println(err.Error())
+		return err
 	}
-}
-func makeDeleteEndpoint(service UserService) UserController {
-	return func(ctx context.Context, data interface{}) (interface{}, error) {
-		result := data.(DeleteReq)
-		if err := service.Delete(ctx, result.UserID); err != nil {
-			if errors.As(err, &ErrNotFound{}) {
-				return nil, response.NotFound(err.Error())
-			}
-			return nil, response.InternalServerError(err.Error())
-		}
-		return response.OK("success", nil), nil
+	id, err := res.LastInsertId()
+	if err != nil {
+		r.log.Println(err.Error())
+		return err
 	}
+
+	user.ID = uint64(id)
+	r.log.Println("user created with id: ", user.ID)
+
+	return nil
 }
 
-func makeCreateEndpoint(service UserService) UserController {
-	return func(ctx context.Context, data interface{}) (interface{}, error) {
-		reqData := data.(CreateRequest)
+func (r *userRepository) Update(ctx context.Context, id uint64, firstName, lastName, email string) error {
+	var fields []string
+	var values []interface{}
 
-		if reqData.FirstName == "" {
-			return nil, response.BadRequest(ErrFistNameRequeried.Error())
-		}
-		if reqData.LastName == "" {
-			return nil, response.BadRequest(ErrLastNameRequeried.Error())
-		}
-		if reqData.Email == "" {
-			return nil, response.BadRequest(ErrEmailRequeried.Error())
-		}
-		user, err := service.Create(ctx, reqData.FirstName, reqData.LastName, reqData.Email)
-		if err != nil {
-			return nil, response.InternalServerError(err.Error())
-		}
-
-		return response.Created("success", user), nil
+	if email != "" {
+		fields = append(fields, "email = ?")
+		values = append(values, email)
 	}
+	if firstName != "" {
+		fields = append(fields, "first_name = ?")
+		values = append(values, firstName)
+	}
+	if lastName != "" {
+		fields = append(fields, "last_name = ?")
+		values = append(values, lastName)
+	}
+
+	if len(fields) == 0 {
+		r.log.Println()
+		return ErrThereArentFields
+	}
+
+	values = append(values, id)
+	sqlQuery := fmt.Sprintf("UPDATE users SET %s WHERE id = ? ", strings.Join(fields, ", "))
+
+	res, err := r.db.Exec(sqlQuery, values...)
+	if err != nil {
+		r.log.Println(err.Error())
+		return err
+	}
+
+	row, err := res.RowsAffected()
+	if err != nil {
+		r.log.Println(err.Error())
+		return err
+	}
+
+	if row == 0 {
+		err := ErrNotFound{ID: id}
+		r.log.Println(err.Error())
+		return err
+	}
+
+	r.log.Println("user updated id: ", id)
+	return nil
 }
-func makeUpdateEndpoint(service UserService) UserController {
-	return func(ctx context.Context, data interface{}) (interface{}, error) {
-		reqData := data.(UpdateRequest)
 
-		if err := service.Update(ctx, reqData.UserID, reqData.FirstName, reqData.LastName, reqData.Email); err != nil {
+func (r *userRepository) GetAll(ctx context.Context) ([]domain.User, error) {
+	var users []domain.User
 
-			if errors.As(err, &ErrNotFound{}) {
-				return nil, response.NotFound(err.Error())
-			}
-			return nil, response.InternalServerError(err.Error())
+	sqlQuery := "SELECT id, email, first_name, last_name FROM users"
+
+	rows, err := r.db.Query(sqlQuery)
+	if err != nil {
+		r.log.Println(err.Error())
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var u domain.User
+
+		if err := rows.Scan(&u.ID, &u.Email, &u.FirstName, &u.LastName); err != nil {
+			r.log.Println(err.Error())
+			return nil, err
 		}
 
-		return response.OK("success", nil), nil
+		users = append(users, u)
 	}
+	return users, nil
+}
+
+func (r *userRepository) GetById(ctx context.Context, id uint64) (*domain.User, error) {
+	var u domain.User
+
+	sqlQuery := "SELECT id, email, first_name, last_name FROM users WHERE id = ?"
+
+	if err := r.db.QueryRow(sqlQuery, id).Scan(&u.ID, &u.Email, &u.FirstName, &u.LastName); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrNotFound{ID: id}
+		}
+		return nil, err
+	}
+
+	r.log.Println("user get user with id:", id)
+
+	return &u, nil
+}
+func (r *userRepository) Delete(ctx context.Context, id uint64) error {
+	sqlQuery := "DELETE FROM users WHERE id = ?"
+	res, err := r.db.Exec(sqlQuery, id)
+
+	if err != nil {
+		return err
+	}
+
+	row, err := res.RowsAffected()
+	if err != nil {
+		r.log.Println(err.Error())
+		return err
+	}
+
+	if row == 0 {
+		err := ErrNotFound{ID: id}
+		r.log.Println(err.Error())
+		return err
+	}
+
+	r.log.Println("user delete with id:", id)
+
+	return nil
 }

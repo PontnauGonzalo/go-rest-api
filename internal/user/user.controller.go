@@ -3,7 +3,7 @@ package user
 import (
 	"context"
 	"errors"
-	"github.com/PontnauGonzalo/go-web-response/response/response"
+	"github.com/PontnauGonzalo/go-web-response/response"
 )
 
 type (
