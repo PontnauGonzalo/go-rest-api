@@ -3,7 +3,6 @@ package user
 import (
 	"context"
 	"errors"
-
 	// "github.com/PontnauGonzalo/go-rest-api/response"
 )
 

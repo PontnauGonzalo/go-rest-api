@@ -10,7 +10,7 @@ import (
 
 	"github.com/PontnauGonzalo/go-rest-api/internal/user"
 	"github.com/PontnauGonzalo/go-rest-api/pkg/transport"
-	"github.com/PontnauGonzalo/go-rest-api/response"
+	"github.com/PontnauGonzalo/go-web-response"
 	"github.com/gin-gonic/gin"
 )
 
