@@ -6,13 +6,6 @@
 API REST desarrollada en Go que implementa los principios [SOLID](https://en.wikipedia.org/wiki/SOLID)
 y [clean architecture](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html). El proyecto está estructurado en capas bien definidas (Repository, Service, Controller) para garantizar la separación de responsabilidades y facilitar el mantenimiento. Se enfoca en buenas prácticas como uso de contexts, manejo de errores HTTP estandarizados, middleware para autenticación y autorización.
 
-## Características Principales
-- Principios SOLID para un diseño orientado a objetos mantenible y escalable
-- Clean Architecture para separar las capas de la aplicación
-- Diseño basado en interfaces para facilitar testing y desacoplamiento
-- Patrón Repository para abstracción de la capa de datos
-- Service Layer para encapsular la lógica de negocio
-
 ## Tecnologías y Patrones
 - Go 1.13+
 - Gin Gonic para routing y middleware
@@ -25,22 +18,33 @@ y [clean architecture](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clea
 
 ## Estructura del Proyecto
 ```
-├── cmd/
-│   └── main.go               # Punto de entrada de la aplicación
-├── internal/                 # Código interno de la aplicación
-├── pkg/
-│   ├── bootstrap/           # Inicialización y configuración
-│   ├── handler/             # Manejadores HTTP
-│   │   └── user.go         # Handlers de usuarios
-│   └── transport/          # Capa de transporte
-│       ├── gin.go          # Configuración de Gin
-│       └── http.go         # Configuración HTTP general
-├── .env                     # Variables de entorno
-├── .env.example             # Ejemplo de variables de entorno
-├── .gitignore
-├── docker-compose.yml       # Configuración de Docker
-├── go.mod                   # Dependencias
-└── go.sum                   # Checksums de dependencias
+├── docker/                  # Configuraciones de Docker
+│   └── mysql/
+│       ├── Dockerfile      # Dockerfile para MySQL
+│       └── init.sql        # Script inicial de la base de datos
+│
+├── internal/               # Código interno de la aplicación
+│   ├── domain/            # Definición de modelos y entidades
+│   │   ├── message.go
+│   │   └── user.go
+│   └── user/              # Módulo de usuarios
+│       ├── errors.go      # Manejo de errores específicos
+│       ├── user.controller.go    # Controladores
+│       ├── user.repository.go    # Repositorios
+│       └── user.service.go       # Servicios
+│
+├── pkg/                   # Paquetes compartidos
+│   ├── bootstrap/         # Inicialización de la aplicación
+│   │   └── bootstrap.go
+│   ├── handler/          # Manejadores HTTP
+│   │   └── user.go
+│   └── transport/        # Capa de transporte
+│       └── http.go
+│
+├── .env.example          # Ejemplo de variables de entorno
+├── go.mod               # Dependencias del proyecto
+├── go.sum               # Checksums de dependencias
+└── README.md            # Documentación del proyecto
 ```
 
 
@@ -59,12 +63,6 @@ y [clean architecture](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clea
 - `PATCH /v1/products/:id`: Actualizar producto existente
 - `DELETE /v1/products/:id`: Eliminar producto
 
-##  Tests
-Para ejecutar los tests:
-
-```bash
-go test ./...
-```
 <br>
 <br>
 
